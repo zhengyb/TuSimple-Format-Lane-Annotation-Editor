@@ -4,83 +4,62 @@
 
 本项目是一个基于 PyQt5 的 TuSimple 2D 车道线标注工具，支持多语言界面，适用于 Ubuntu 和 Windows 系统。
 
-## 一、Ubuntu 开发环境设置
+## 使用方式（推荐普通用户）
 
-### 1. 安装 Python3 及 pip
+如果你只是想用工具，并不想修改代码，推荐直接使用打包好的 `.exe` 文件。
 
-Ubuntu 20.04+ 默认自带 Python3，如未安装可执行：
+### 1. 下载可执行文件
+
+点击右上角的Code，从下拉菜单中下载Zip。
+
+### 2. 运行
+解压文件，双击.exe文件运行程序。
+
+## 从源代码运行（开发者）
+
+### 1. 安装 Python 3.10（推荐）
+
+[前往官网下载 Python 3.10](https://www.python.org/downloads/release/python-3100/)
+
+### 2. 克隆项目并进入目录
 
 ```bash
-sudo apt update
-sudo apt install python3.10 python3-pip
+git clone https://github.com/WhosFish/TuSimple-Format-Lane-Annotation-Editor.git
+cd TuSimple-Format-Lane-Annotation-Editor
+git checkout win
 ```
 
-### 2. 安装 Python 开发包（用于打包）
+### 3. 创建虚拟环境并激活（可选）
 
 ```bash
-sudo apt install python3.10-dev
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-### 3. 安装依赖库
-
-建议使用虚拟环境（可选）：
+### 4. 安装依赖库
 
 ```bash
-python3.10 -m pip install --upgrade pip
-python3.10 -m pip install virtualenv
-python3.10 -m virtualenv venv
-source venv/bin/activate
-```
-
-安装项目依赖：
-
-```bash
+pip install --upgrade pip
 pip install -r requirements.txt
-```
-## 二、运行开发版
-
-确保 `res` 目录下有 `res_cn.json` 和 `res_en.json`，然后直接运行：
-
-```bash
-python3 lane_label_tool.py
 ```
 
 ## 三、用 PyInstaller 打包可执行文件
 
-### 1. 打包命令
-
-**推荐直接打包整个 res 目录：**
+### 1. 安装PyInstaller
 
 ```bash
-pyinstaller --noconfirm --onefile --add-data "res:res" lane_label_tool.py
+pip install pyinstaller
 ```
-
-- `--onefile` 生成单一可执行文件
-- `--add-data "res:res"` 表示将 `res` 目录打包到可执行文件中
-
-> 注意：  
-> - Windows 下 `--add-data "res;res"`，Linux 下 `--add-data "res:res"`
-> - 打包后可执行文件在 `dist/lane_label_tool`（或 `dist/lane_label_tool.exe`）
-
-### 3. 运行打包后的程序
+### 2. 打包命令（包含翻译文件）
 
 ```bash
-cd dist
-./lane_label_tool
+python -m PyInstaller --onefile --windowed --add-data "res\\res_cn.json;res" --add-data "res\\res_en.json;res" lane_label_tool.py
 ```
 
-## 四、使用方法
+## 四、常见问题
 
 TODO
 
-## 五、常见问题
-
-TODO
-
-
-## 六、联系方式
+## 五、联系方式
 
 如有问题请提交 issue 或联系作者。
-
-
-
