@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import os
-import PyQt5.QtCore
-os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = os.path.dirname(PyQt5.QtCore.__file__) + "/plugins"
-
 import sys
+import PyQt5
+os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = os.path.join(
+    os.path.dirname(PyQt5.__file__), "Qt5", "plugins", "platforms"
+)
 import json
 import copy
 import cv2
