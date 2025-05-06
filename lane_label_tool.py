@@ -48,6 +48,7 @@ class ConfigDialog(QDialog):
     def __init__(self, config, parent=None):
         super().__init__(parent)
         self.lang_manager = parent.lang_manager
+        self.parent = parent  # 保存父窗口引用
         self.setWindowTitle(self.lang_manager.get_text("config_title"))
         self.setModal(True)
         self.resize(500, 300)
@@ -59,16 +60,19 @@ class ConfigDialog(QDialog):
         self.image_root = QLineEdit(self)
         self.image_root.setText(config.get("image_root", "datasets/TUSimple/tusimple"))
         self.image_root.setMinimumWidth(300)
+        self.image_root.textChanged.connect(self.on_image_root_changed)
         layout.addRow(self.lang_manager.get_text("config_image_root"), self.image_root)
         
         # 项目ID配置
         self.project_id = QLineEdit(self)
         self.project_id.setText(config.get("project_id", "tusimple_lane"))
+        self.project_id.textChanged.connect(self.on_project_id_changed)
         layout.addRow(self.lang_manager.get_text("config_project_id"), self.project_id)
         
         # 最大车道线数配置
         self.max_lanes = QLineEdit(self)
         self.max_lanes.setText(str(config.get("max_lanes", 6)))
+        self.max_lanes.textChanged.connect(self.on_max_lanes_changed)
         layout.addRow(self.lang_manager.get_text("config_max_lanes"), self.max_lanes)
         
         # 新增：画布尺寸配置
@@ -76,6 +80,7 @@ class ConfigDialog(QDialog):
         self.canvas_size.addItems(["x1.0", "x1.5", "x2.0", "x2.5"])
         current_size = config.get("canvas_size", "x1.0")
         self.canvas_size.setCurrentText(current_size)
+        self.canvas_size.currentTextChanged.connect(self.on_canvas_size_changed)
         layout.addRow(self.lang_manager.get_text("config_canvas_size"), self.canvas_size)
         
         # 新增：语言选择下拉框
@@ -98,6 +103,58 @@ class ConfigDialog(QDialog):
         main_layout.addWidget(button_box)
         
         self.setLayout(main_layout)
+    
+    def on_image_root_changed(self, text):
+        """图像根目录改变时的处理"""
+        self.parent.config["image_root"] = text
+        self.parent.save_config()
+    
+    def on_project_id_changed(self, text):
+        """项目ID改变时的处理"""
+        self.parent.config["project_id"] = text
+        self.parent.save_config()
+        # 更新项目ID显示
+        self.parent.project_id_label.setText(
+            self.lang_manager.get_text("label_project_id", id=text))
+    
+    def on_max_lanes_changed(self, text):
+        """最大车道线数改变时的处理"""
+        try:
+            max_lanes = int(text)
+            self.parent.config["max_lanes"] = max_lanes
+            self.parent.save_config()
+            
+            # 如果当前车道线数超过新的最大值，删除多余的车道线
+            if len(self.parent.lane_points) > max_lanes:
+                self.parent.lane_points = self.parent.lane_points[:max_lanes]
+                self.parent.update_lane_list()
+                self.parent.update_canvas()
+                QMessageBox.information(self, "提示", f"已将车道线数量限制为{max_lanes}条")
+        except ValueError:
+            pass
+    
+    def on_canvas_size_changed(self, text):
+        """画布尺寸改变时的处理"""
+        canvas_scale = float(text.replace("x", ""))
+        # 更新画布大小
+        canvas_width = int(round(TUSIMPLE_IMG_SIZE[0] * canvas_scale))
+        canvas_height = int(round(TUSIMPLE_IMG_SIZE[1] * canvas_scale))
+        self.parent.canvas.setFixedSize(canvas_width, canvas_height)
+        
+        # 更新窗口大小
+        base_width = 1600
+        base_height = 900
+        window_width = int(round(base_width * canvas_scale))
+        window_height = int(round(base_height * canvas_scale))
+        self.parent.resize(window_width, window_height)
+        
+        # 更新配置
+        self.parent.config["canvas_size"] = text
+        self.parent.save_config()
+        
+        # 重新加载图像以应用新的缩放
+        self.parent.load_image()
+        self.parent.update_canvas()
     
     def get_config(self):
         """获取配置信息"""
@@ -862,6 +919,8 @@ class LaneLabelTool(QMainWindow):
 
     def save_copy(self):
         copy_filepath = self._save_copy()
+        if not copy_filepath:
+            return  # 修复：副本保存失败时不再继续
         # reopen the copy file
         self.json_file_path = copy_filepath
         self._open_annotation(copy_filepath)
@@ -874,6 +933,8 @@ class LaneLabelTool(QMainWindow):
 
     def save_copy2(self):
         copy_filepath = self._save_copy()
+        if not copy_filepath:
+            return  # 修复：副本保存失败时不再继续
         # reopen the copy file
         self.json_file_path = copy_filepath
         self._open_annotation(copy_filepath)
@@ -948,42 +1009,16 @@ class LaneLabelTool(QMainWindow):
         
         if dialog.exec_() == QDialog.Accepted:
             old_lang = self.config.get("lang", "CN")
-            old_canvas_size = self.config.get("canvas_size", "x1.0")
             new_config = dialog.get_config()
-            self.config.update(new_config)
-            self.save_config()
             
+            # 只处理语言变化
             if old_lang != new_config["lang"]:
+                self.config["lang"] = new_config["lang"]
+                self.save_config()
+                self.lang_manager.set_language(new_config["lang"])
                 QMessageBox.information(self, 
                     self.lang_manager.get_text("dialog_info"), 
                     self.lang_manager.get_text("msg_lang_changed"))
-            
-            # 如果当前车道线数超过新的最大值，删除多余的车道线
-            max_lanes = self.config["max_lanes"]
-            if len(self.lane_points) > max_lanes:
-                self.lane_points = self.lane_points[:max_lanes]
-                self.update_lane_list()
-                self.update_canvas()
-                QMessageBox.information(self, "提示", f"已将车道线数量限制为{max_lanes}条")
-            
-            # 如果画布尺寸发生变化，重新设置画布大小并重新加载图像
-            if old_canvas_size != new_config["canvas_size"]:
-                canvas_scale = float(new_config["canvas_size"].replace("x", ""))
-                # 更新画布大小
-                canvas_width = int(round(TUSIMPLE_IMG_SIZE[0] * canvas_scale))
-                canvas_height = int(round(TUSIMPLE_IMG_SIZE[1] * canvas_scale))
-                self.canvas.setFixedSize(canvas_width, canvas_height)
-                
-                # 更新窗口大小
-                base_width = 1600
-                base_height = 900
-                window_width = int(round(base_width * canvas_scale))
-                window_height = int(round(base_height * canvas_scale))
-                self.resize(window_width, window_height)
-                
-                # 重新加载图像以应用新的缩放
-                self.load_image()
-                self.update_canvas()
 
     def load_config(self):
         """加载配置文件"""
