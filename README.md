@@ -14,11 +14,6 @@ On a Ubuntu system,
 
 ### 2. Clone the Project and Enter the Directory
 
-```bash
-git clone https://github.com/WhosFish/TuSimple-Format-Lane-Annotation-Editor.git
-cd TuSimple-Format-Lane-Annotation-Editor
-```
-
 ### 3. Create and Activate a Virtual Environment (Optional)
 
 ```bash
