@@ -32,6 +32,7 @@
     "config_project_id": "Project ID:",
     "config_max_lanes": "Max Lanes:",
     "config_lang": "Language:",
+    "config_canvas_size": "Canvas Size[1280x720]:",
     "lane_item": "Lane {index} ({count}pts) {color}",
     "dialog_open_file": "Select TuSimple Annotation File",
     "dialog_save_file": "Save Annotation File",
