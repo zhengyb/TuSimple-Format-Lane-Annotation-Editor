@@ -35,7 +35,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## 3. Packaging Executable with PyInstaller
+## Packaging Executable with PyInstaller
 
 ### 1. Install PyInstaller
 
