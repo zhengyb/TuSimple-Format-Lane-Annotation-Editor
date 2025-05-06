@@ -32,6 +32,7 @@
     "config_project_id": "项目ID:",
     "config_max_lanes": "最大车道线数:",
     "config_lang": "界面语言:",
+    "config_canvas_size": "画布大小[1280x720]:",
     "lane_item": "车道线 {index} ({count}点) {color}",
     "dialog_open_file": "选择TuSimple标注文件",
     "dialog_save_file": "保存标注文件",

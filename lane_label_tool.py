@@ -28,7 +28,6 @@ LANE_COLOR_NAMES = ["red", "green", "blue", "purple", "yellow", "cyan"]
 
 
 TUSIMPLE_IMG_SIZE = (1280, 720)
-CANVAS_SIZE = (960, 540)
 
 LANG_EN = "EN"
 LANG_CN = "CN"
@@ -72,6 +71,13 @@ class ConfigDialog(QDialog):
         self.max_lanes.setText(str(config.get("max_lanes", 6)))
         layout.addRow(self.lang_manager.get_text("config_max_lanes"), self.max_lanes)
         
+        # 新增：画布尺寸配置
+        self.canvas_size = QComboBox(self)
+        self.canvas_size.addItems(["x1.0", "x1.5", "x2.0", "x2.5"])
+        current_size = config.get("canvas_size", "x1.0")
+        self.canvas_size.setCurrentText(current_size)
+        layout.addRow(self.lang_manager.get_text("config_canvas_size"), self.canvas_size)
+        
         # 新增：语言选择下拉框
         self.lang_combo = QComboBox(self)
         self.lang_combo.addItems(["中文", "English"])
@@ -104,6 +110,7 @@ class ConfigDialog(QDialog):
             "image_root": self.image_root.text(),
             "project_id": self.project_id.text(),
             "max_lanes": max_lanes,
+            "canvas_size": self.canvas_size.currentText(),
             "lang": "CN" if self.lang_combo.currentText() == "中文" else "EN"
         }
 
@@ -154,9 +161,14 @@ class LaneLabelTool(QMainWindow):
             self.lang_manager.set_language(self.config.get("lang", "CN"))
             
             self.setWindowTitle(self.lang_manager.get_text("window_title"))
-            #self.resize(1200, 800)
-            #self.setMinimumSize(1600, 900)
-            self.resize(1600, 900)
+            # 根据画布缩放比例设置窗口大小
+            canvas_scale = float(self.config["canvas_size"].replace("x", ""))
+            base_width = 1600
+            base_height = 900
+            window_width = int(round(base_width * canvas_scale))
+            window_height = int(round(base_height * canvas_scale))
+            self.resize(window_width, window_height)
+            
             self.annotation_data = []
             self.current_index = 0  # 当前标注的图片索引
             self.current_lane = 0  # 当前标注的车道线索引
@@ -315,7 +327,13 @@ class LaneLabelTool(QMainWindow):
 
         main_layout = QHBoxLayout()
         self.canvas = QLabel()
-        self.canvas.setFixedSize(TUSIMPLE_IMG_SIZE[0], TUSIMPLE_IMG_SIZE[1])
+        
+        # 根据配置设置画布尺寸
+        canvas_scale = float(self.config["canvas_size"].replace("x", ""))
+        canvas_width = int(round(TUSIMPLE_IMG_SIZE[0] * canvas_scale))
+        canvas_height = int(round(TUSIMPLE_IMG_SIZE[1] * canvas_scale))
+        self.canvas.setFixedSize(canvas_width, canvas_height)
+        
         self.canvas.setMouseTracking(True)
         self.canvas.mousePressEvent = self.on_canvas_click
         main_layout.addWidget(self.canvas)
@@ -630,6 +648,13 @@ class LaneLabelTool(QMainWindow):
                 logging.info(f"图片尺寸: {img_w}x{img_h}")
                 assert img_h == TUSIMPLE_IMG_SIZE[1] and img_w == TUSIMPLE_IMG_SIZE[0], f"Image size mismatch, img_h: {img_h}, img_w: {img_w}"
                 self.image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                
+                # 根据画布缩放比例调整图像大小
+                canvas_scale = float(self.config["canvas_size"].replace("x", ""))
+                if canvas_scale != 1.0:
+                    new_width = int(round(img_w * canvas_scale))
+                    new_height = int(round(img_h * canvas_scale))
+                    self.image = cv2.resize(self.image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
         except Exception as e:
             logging.exception(f"加载图片异常: {self.image_path} : {e}")
             self.image = np.zeros((TUSIMPLE_IMG_SIZE[1], TUSIMPLE_IMG_SIZE[0], 3), dtype=np.uint8)
@@ -685,8 +710,10 @@ class LaneLabelTool(QMainWindow):
 
     def on_canvas_click(self, event):
         if event.button() == Qt.LeftButton and self.current_lane < len(self.lane_points):
-            x = int(event.pos().x())
-            y = int(event.pos().y())
+            canvas_scale = float(self.config["canvas_size"].replace("x", ""))
+            # 将点击坐标转换回原始尺寸
+            x = int(round(event.pos().x() / canvas_scale))
+            y = int(round(event.pos().y() / canvas_scale))
             self.push_undo()
             self.lane_points[self.current_lane].append((x, y))
             # sort points by y
@@ -699,7 +726,9 @@ class LaneLabelTool(QMainWindow):
             return
         img = self.image.copy()
         painter = QPainter()
-        qimg = QImage(img.data, TUSIMPLE_IMG_SIZE[0], TUSIMPLE_IMG_SIZE[1], img.strides[0], QImage.Format_RGB888)
+        canvas_scale = float(self.config["canvas_size"].replace("x", ""))
+        img_h, img_w = img.shape[:2]
+        qimg = QImage(img.data, img_w, img_h, img.strides[0], QImage.Format_RGB888)
         pixmap = QPixmap.fromImage(qimg)
         painter.begin(pixmap)
 
@@ -709,8 +738,8 @@ class LaneLabelTool(QMainWindow):
             painter.setPen(pen)
             for i in range(len(self.h_samples)):
                 if (i % 4 == 0) or (i == len(self.h_samples) - 1):
-                    y = self.h_samples[i]
-                    painter.drawLine(0, y, 1280, y)
+                    y = int(round(self.h_samples[i] * canvas_scale))
+                    painter.drawLine(0, y, img_w, y)
                     painter.setPen(QColor(80, 80, 80))
                     painter.drawText(5, y - 2, f"{y}")
                     painter.setPen(pen)
@@ -724,13 +753,21 @@ class LaneLabelTool(QMainWindow):
         for idx in lane_indices:
             lane = self.lane_points[idx]
             color = LANE_COLORS[idx % len(LANE_COLORS)]
-            pen = QPen(color, 3)
+            pen = QPen(color, max(1, int(3 * canvas_scale)))  # 线条宽度也随缩放调整
             painter.setPen(pen)
             for i in range(1, len(lane)):
-                painter.drawLine(QPoint(*lane[i-1]), QPoint(*lane[i]))
+                # 缩放坐标
+                x1 = int(round(lane[i-1][0] * canvas_scale))
+                y1 = int(round(lane[i-1][1] * canvas_scale))
+                x2 = int(round(lane[i][0] * canvas_scale))
+                y2 = int(round(lane[i][1] * canvas_scale))
+                painter.drawLine(QPoint(x1, y1), QPoint(x2, y2))
             for pt in lane:
+                # 缩放点坐标
+                x = int(round(pt[0] * canvas_scale))
+                y = int(round(pt[1] * canvas_scale))
                 painter.setBrush(color)
-                painter.drawEllipse(QPoint(*pt), 2, 2)  # 修改：直径为3（半径为1）
+                painter.drawEllipse(QPoint(x, y), max(1, int(2 * canvas_scale)), max(1, int(2 * canvas_scale)))
         painter.end()
         self.canvas.setPixmap(pixmap)
 
@@ -911,6 +948,7 @@ class LaneLabelTool(QMainWindow):
         
         if dialog.exec_() == QDialog.Accepted:
             old_lang = self.config.get("lang", "CN")
+            old_canvas_size = self.config.get("canvas_size", "x1.0")
             new_config = dialog.get_config()
             self.config.update(new_config)
             self.save_config()
@@ -927,6 +965,25 @@ class LaneLabelTool(QMainWindow):
                 self.update_lane_list()
                 self.update_canvas()
                 QMessageBox.information(self, "提示", f"已将车道线数量限制为{max_lanes}条")
+            
+            # 如果画布尺寸发生变化，重新设置画布大小并重新加载图像
+            if old_canvas_size != new_config["canvas_size"]:
+                canvas_scale = float(new_config["canvas_size"].replace("x", ""))
+                # 更新画布大小
+                canvas_width = int(round(TUSIMPLE_IMG_SIZE[0] * canvas_scale))
+                canvas_height = int(round(TUSIMPLE_IMG_SIZE[1] * canvas_scale))
+                self.canvas.setFixedSize(canvas_width, canvas_height)
+                
+                # 更新窗口大小
+                base_width = 1600
+                base_height = 900
+                window_width = int(round(base_width * canvas_scale))
+                window_height = int(round(base_height * canvas_scale))
+                self.resize(window_width, window_height)
+                
+                # 重新加载图像以应用新的缩放
+                self.load_image()
+                self.update_canvas()
 
     def load_config(self):
         """加载配置文件"""
@@ -935,13 +992,19 @@ class LaneLabelTool(QMainWindow):
             "image_root": "datasets/TUSimple/tusimple",
             "project_id": "tusimple_lane",
             "max_lanes": 6,
-            "lang": "CN"  # 新增默认语言设置
+            "canvas_size": "x1.0",  # 新增默认画布尺寸
+            "lang": "CN"
         }
         
         if os.path.exists(config_file):
             try:
                 with open(config_file, "r") as f:
-                    return json.load(f)
+                    loaded_config = json.load(f)
+                    # 更新配置
+                    for key, value in default_config.items():
+                        if key not in loaded_config:
+                            loaded_config[key] = value
+                    return loaded_config
             except Exception as e:
                 print(f"加载配置文件失败: {e}")
                 return default_config
