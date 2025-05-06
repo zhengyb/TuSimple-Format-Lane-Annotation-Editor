@@ -53,8 +53,14 @@ pip install pyinstaller
 ```
 ### 2. Packaging Command (with Translation Files)
 
+On a Windows system,
 ```bash
 python -m PyInstaller --onefile --windowed --add-data "res\\res_cn.json;res" --add-data "res\\res_en.json;res" lane_label_tool.py
+```
+
+On a Ubuntu system,
+```bash
+pyinstaller --noconfirm --onefile --add-data "res:res" lane_label_tool.py
 ```
 
 ## 4. FAQ
