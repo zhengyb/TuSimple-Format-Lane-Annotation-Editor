@@ -19,13 +19,14 @@ from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QPen, QKeySequence
 from PyQt5.QtCore import Qt, QPoint
 import logging
 
+print("here")
+
 LANE_COLORS = [
     QColor(255, 0, 0), QColor(0, 255, 0), QColor(0, 0, 255),
     QColor(255, 0, 255), QColor(255, 255, 0), QColor(0, 255, 255)
 ]
 
 LANE_COLOR_NAMES = ["red", "green", "blue", "purple", "yellow", "cyan"]
-
 
 TUSIMPLE_IMG_SIZE = (1280, 720)
 
@@ -75,6 +76,14 @@ class ConfigDialog(QDialog):
         self.max_lanes.textChanged.connect(self.on_max_lanes_changed)
         layout.addRow(self.lang_manager.get_text("config_max_lanes"), self.max_lanes)
         
+        # Potentially: validate sample interval on button press instead of on change
+        # so that function has more error catching capabilities (if input is str instead of int, if is blank, etc)
+        # New: Sample Interval Feature
+        self.sample_interval = QLineEdit(self)
+        self.sample_interval.setText(str(config.get("sample_interval", 2)))
+        self.sample_interval.textChanged.connect(self.on_sample_interval_changed)
+        layout.addRow(self.lang_manager.get_text("config_sample_interval"), self.sample_interval)
+
         # 新增：画布尺寸配置
         self.canvas_size = QComboBox(self)
         self.canvas_size.addItems(["x1.0", "x1.5", "x2.0", "x2.5"])
@@ -94,7 +103,7 @@ class ConfigDialog(QDialog):
         button_box = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
             Qt.Horizontal, self)
-        button_box.accepted.connect(self.accept)
+        button_box.accepted.connect(self.settings_accept)
         button_box.rejected.connect(self.reject)
         
         # 创建主布局
@@ -104,6 +113,22 @@ class ConfigDialog(QDialog):
         
         self.setLayout(main_layout)
     
+    def settings_accept(self):
+        errors = []
+
+        max_lanes_result = self.on_max_lanes_changed()
+        if max_lanes_result:
+            errors.append(max_lanes_result)
+        
+        sample_interval_result = self.on_sample_interval_changed()
+        if sample_interval_result:
+            errors.append(sample_interval_result)
+        
+        if len(errors) > 0:
+            QMessageBox.warning(self, "Settings Errors", "\n".join(errors))
+        else:
+            self.accept()
+
     def on_image_root_changed(self, text):
         """图像根目录改变时的处理"""
         self.parent.config["image_root"] = text
@@ -117,8 +142,9 @@ class ConfigDialog(QDialog):
         self.parent.project_id_label.setText(
             self.lang_manager.get_text("label_project_id", id=text))
     
-    def on_max_lanes_changed(self, text):
+    def on_max_lanes_changed(self):
         """最大车道线数改变时的处理"""
+        text = self.max_lanes.text()
         try:
             max_lanes = int(text)
             self.parent.config["max_lanes"] = max_lanes
@@ -129,10 +155,24 @@ class ConfigDialog(QDialog):
                 self.parent.lane_points = self.parent.lane_points[:max_lanes]
                 self.parent.update_lane_list()
                 self.parent.update_canvas()
-                QMessageBox.information(self, "提示", f"已将车道线数量限制为{max_lanes}条")
+                return f"提示, 已将车道线数量限制为{max_lanes}条"
         except ValueError:
-            pass
-    
+            return "Invalid value for max lanes!"
+
+    def on_sample_interval_changed(self):
+        text = self.sample_interval.text()
+        try:
+            sample_interval = int(text)
+            if sample_interval < 2 or sample_interval > 50:
+                return "Invalid sample interval; value should be between 2 and 50"
+            else:
+                self.parent.config["sample_interval"] = sample_interval
+                self.parent.save_config()
+        except ValueError:
+            return "Invalid sample interval!"
+            # Change the checks to be on button press instead of change
+            # QMessageBox.information(self, "Invalid Sample Interval", "Please enter a valid integer between 2 and 50")
+
     def on_canvas_size_changed(self, text):
         """画布尺寸改变时的处理"""
         canvas_scale = float(text.replace("x", ""))
@@ -162,11 +202,17 @@ class ConfigDialog(QDialog):
             max_lanes = int(self.max_lanes.text())
         except ValueError:
             max_lanes = 6
+        
+        try:
+            sample_interval = int(self.sample_interval.text())
+        except ValueError:
+            sample_interval = 2
             
         return {
             "image_root": self.image_root.text(),
             "project_id": self.project_id.text(),
             "max_lanes": max_lanes,
+            "sample_interval": sample_interval,
             "canvas_size": self.canvas_size.currentText(),
             "lang": "CN" if self.lang_combo.currentText() == "中文" else "EN"
         }
@@ -273,6 +319,7 @@ class LaneLabelTool(QMainWindow):
         open_btn = QPushButton(self.lang_manager.get_text("btn_open"))
         open_btn.clicked.connect(self.open_annotation)
         save_copy_btn = QPushButton(self.lang_manager.get_text("btn_save_copy"))
+        print(self.lang_manager.resources)
         save_copy_btn.clicked.connect(self.save_copy)
         #prev_btn = QPushButton(self.lang_manager.get_text("btn_prev"))
         #prev_btn.clicked.connect(self.prev_image)
@@ -345,6 +392,11 @@ class LaneLabelTool(QMainWindow):
         organize_btn = QPushButton(self.lang_manager.get_text("btn_organize"))
         organize_btn.clicked.connect(self.organize_current_lane)
 
+        # Sample Interval button
+        sample_btn = QPushButton(self.lang_manager.get_text("btn_sample"))
+        # TODO: implement sample_lanes
+        sample_btn.clicked.connect(self.sample_lanes)
+
         lane_list_label = QLabel(f"<b>{self.lang_manager.get_text('label_lane_list')}</b>")
         lane_list_label.setTextFormat(Qt.RichText)  # 确保使用富文本格式
         right_layout.addWidget(lane_list_label)
@@ -358,6 +410,7 @@ class LaneLabelTool(QMainWindow):
         # 新增：添加上一张/下一张按钮
         right_layout.addWidget(organize_btn)  # 新增：整理按钮
         right_layout.addWidget(show_points_btn)
+        right_layout.addWidget(sample_btn)
         #right_layout.addLayout(progress_layout)
         right_layout.addStretch()
         # 新增：上一张/下一张按钮同一行
@@ -416,6 +469,7 @@ class LaneLabelTool(QMainWindow):
         redo_shortcut.activated.connect(self.redo)
         save_copy_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
         save_copy_shortcut.activated.connect(self.save_copy2)
+        print("file_label: " + self.json_file_label.text())
 
 
     def load_cache(self):
@@ -916,6 +970,31 @@ class LaneLabelTool(QMainWindow):
             self.lang_manager.get_text("dialog_success"),
             self.lang_manager.get_text("msg_interpolation_success", 
                 count=len(new_points)))
+    
+    def sample_lanes(self):
+        file_path = self.cache.get("json_file_path")
+        samples = []
+        if os.path.isfile(file_path):
+            f = open(file_path, "r")
+            if os.path.getsize(file_path) == 0:
+                QMessageBox.information(self, "File empty", "File is empty, please select another!")
+                return
+            interval = self.config["sample_interval"]
+            for index, obj in enumerate(f):
+                if index % interval == 0:
+                    samples.append(json.loads(obj))
+
+            curr_file = self.json_file_path
+            base_name, _ = os.path.splitext(curr_file)
+            project_id = self.config["project_id"]
+            new_file_name = f"{base_name}_{project_id}sampled.json"
+            output = open(new_file_name, "w")
+            for s in samples:
+                json.dump(s, output)
+                output.write("\n")
+            QMessageBox.information(self, "Save success", "Sample saved successfully!")
+        else:
+            QMessageBox.information(self, "Invalid file", "File path invalid!")
 
     def save_copy(self):
         copy_filepath = self._save_copy()

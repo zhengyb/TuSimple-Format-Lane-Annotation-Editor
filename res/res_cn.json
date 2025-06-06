@@ -31,6 +31,7 @@
     "config_image_root": "图片根路径:",
     "config_project_id": "项目ID:",
     "config_max_lanes": "最大车道线数:",
+    "config_sample_interval": "采样间隔:",
     "config_lang": "界面语言:",
     "config_canvas_size": "画布大小[1280x720]:",
     "lane_item": "车道线 {index} ({count}点) {color}",
