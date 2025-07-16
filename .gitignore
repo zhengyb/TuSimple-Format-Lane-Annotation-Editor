@@ -176,3 +176,5 @@ dist/
 .venv/
 cache.json
 config.json
+
+.vscode/

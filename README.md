@@ -48,10 +48,18 @@ On a Windows system,
 ```bash
 python -m PyInstaller --onefile --windowed --add-data "res\\res_cn.json;res" --add-data "res\\res_en.json;res" lane_label_tool.py
 ```
+To see debug logs in console,
+```bash
+python -m PyInstaller --onefile --console --add-data "res\\res_cn.json;res" --add-data "res\\res_en.json;res" lane_label_tool.py
+```
 
 On a Ubuntu system,
 ```bash
-pyinstaller --noconfirm --onefile --add-data "res:res" lane_label_tool.py
+pyinstaller --noconfirm --onefile --windowed --add-data "res:res" lane_label_tool.py
+```
+To see debug logs in console,
+```bash
+pyinstaller --noconfirm --onefile --console --add-data "res:res" lane_label_tool.py
 ```
 
 ## 4. FAQ
